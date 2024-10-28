@@ -6,6 +6,7 @@ startup {
     Assembly.Load(File.ReadAllBytes("Components/asl-help")).CreateInstance("Unity");
     vars.Helper.GameName = "Loddlenaut";
     vars.Helper.LoadSceneManager = true;
+    // v1.2.2 : 35EB427A6923C67287AF2F010045DD9D
     // v1.0.22: 415710B4143885D10CA1C41F7B1C182B
     //    Demo: 5698E15965F1D27D5668B563A7A806A8
 
@@ -17,6 +18,7 @@ startup {
     settings.Add("CleanTangleBay", true, "Fully clean Tangle Bay", "objectives");
     settings.Add("CleanGrimyGulf", true, "Fully clean Grimy Gulf", "objectives");
     settings.Add("CleanGuppiRemnants", true, "Fully clean Guppi Campus", "objectives");
+    settings.Add("CleanGoddleGrotto", false, "Fully clean Goddle Grotto", "objectives");
     settings.Add("LeavePlanet", true, "Leave GUP-14", "objectives");
     
     settings.Add("FindRippleReef", false, "Find Ripple Reef", "objectives");
@@ -24,8 +26,10 @@ startup {
     settings.Add("FindTangleBay", false, "Find Tangle Bay", "objectives");
     settings.Add("FindGrimyGulf", false, "Find Grimy Gulf", "objectives");
     settings.Add("FindGuppiRemnants", false, "Find Guppi Campus", "objectives");
-    settings.Add("GoHome", false, "Go to Home Cove after cleaning all biomes", "objectives");
+    settings.Add("FindGoddleGrotto", false, "Find Goddle Grotto", "objectives");
+    settings.Add("GoHome", false, "Go to Home Cove after cleaning main biomes", "objectives");
     settings.Add("DismantleStructures", false, "Dismantle Home Cove structures", "objectives");
+    settings.Add("DiversifyBiome", false, "Reach max diversity in a biome", "objectives");
     
     settings.Add("CleanLoddle", false, "Clean a Loddle", "objectives");
     settings.Add("BlinkLoddle", false, "Blink at a Loddle", "objectives");
@@ -39,6 +43,10 @@ startup {
     settings.Add("TestNewLaser", false, "Destroy a reinforced crate", "objectives");
     settings.Add("TestNewPuddleScrubber", false, "Clean 3 flat goop puddles", "objectives");
     settings.Add("TestNewScrapVac", false, "Clean 3000 microplastics", "objectives");
+    
+    settings.Add("cleanAllPollution", false, "Fully clean all pollution", "objectives");
+    settings.Add("allLoddleTypes", false, "Encounter all loddle types", "objectives");
+    settings.Add("allHoloBadges", false, "Find all Holo-Badges", "objectives");
 
     settings.Add("upgrades", true, "Split on Upgrades", null);
 
@@ -53,13 +61,9 @@ startup {
     settings.Add("depthUnlocked", false, "Depth Module", "upgrades");
     settings.Add("scrapVacUnlocked", false, "Scrap Vac", "upgrades");
     settings.Add("puddleScrubberUnlocked", false, "Puddle Scrubber", "upgrades");
-
-    settings.Add("extratrackers", true, "Extra Trackers Splits", null);
-
-    settings.Add("nonBiomeComplete", true, "Fully clean non-biome areas", "extratrackers");
-    settings.Add("allLoddleTypes", true, "Encounter all loddle types", "extratrackers");
-    settings.Add("allHoloBadges", false, "Find all Holo-Badges", "extratrackers");
-    settings.Add("allGoopyLoddles", false, "Clean all goopy loddles", "extratrackers");
+    settings.Add("globalTrackerUnlocked", false, "Global Pollution Tracker", "upgrades");
+    settings.Add("inventoryCapacityUnlocked", false, "Inventory Capacity Module", "upgrades");
+    settings.Add("goldenTools", false, "All Golden Tool Upgrades", "upgrades");
 
     //settings.Add("unusable", false, "Unusable", "objectives");
     //settings.Add("FindMetziTrench", false, "Find Metzi Trench (non-functional)", "unusable");
@@ -125,36 +129,94 @@ init {
             {
                 vars.triggeredSplits = new Dictionary<string, bool>();
                 foreach (string name in vars.objectiveNames) {
-                    vars.triggeredSplits[name] = false;
+                    vars.triggeredSplits.Add(name, false);
                 }
                 foreach (string name in vars.extraSplitNames) {
-                    vars.triggeredSplits[name] = false;
+                    vars.triggeredSplits.Add(name, false);
                 }
-                foreach (string name in vars.etSplitNames) {
-                    vars.triggeredSplits[name] = false;
+            });
+
+            // The game objectives didn't actually change in the 1.2 update, so we need to track the new stuff separately
+            vars.Helper["FindGoddleGrotto"] = mono.Make<bool>("EngineHub", "CentralGameMenu", "goddleGrottoHasBeenFound");
+            vars.Helper["FindGoddleGrotto"].FailAction = MemoryWatcher.ReadFailAction.SetZeroOrNull;
+            // Check if Goddle Grotto has been cleaned by checking its fast travel unlock state
+            vars.Helper["fastTravelPoints"] = mono.MakeArray<bool>("EngineHub", "FastTravelMenu", "locationFastTravelUnlockStates");
+            vars.Helper["fastTravelPoints"].FailAction = MemoryWatcher.ReadFailAction.SetZeroOrNull;
+            vars.Helper["globalTrackerUnlocked"] = mono.Make<bool>("EngineHub", "Upgrades", "globalPollutionTrackerIsUnlocked");
+            vars.Helper["globalTrackerUnlocked"].FailAction = MemoryWatcher.ReadFailAction.SetZeroOrNull;
+            vars.Helper["inventoryCapacityUnlocked"] = mono.Make<bool>("EngineHub", "Upgrades", "inventoryUpgradeIsUnlocked");
+            vars.Helper["inventoryCapacityUnlocked"].FailAction = MemoryWatcher.ReadFailAction.SetZeroOrNull;
+            vars.Helper["goldenToolsUnlocked"] = mono.MakeArray<bool>("EngineHub", "PlayerEquipment", "goldUnlockStates");
+            vars.Helper["goldenToolsUnlocked"].FailAction = MemoryWatcher.ReadFailAction.SetZeroOrNull;
+            vars.Helper["cleanAllPollution"] = mono.Make<bool>("EngineHub", "GlobalPollutionTracker", "oceanIsClean");
+            vars.Helper["cleanAllPollution"].FailAction = MemoryWatcher.ReadFailAction.SetZeroOrNull;
+            vars.Helper["loddleTypesUnlocked"] = mono.MakeArray<bool>("EngineHub", "CentralGameMenu", "evoCardUnlockStates");
+            vars.Helper["loddleTypesUnlocked"].FailAction = MemoryWatcher.ReadFailAction.SetZeroOrNull;
+            vars.Helper["holoBadgesUnlocked"] = mono.MakeArray<bool>("EngineHub", "CentralGameMenu", "badgeUnlockStates");
+            vars.Helper["holoBadgesUnlocked"].FailAction = MemoryWatcher.ReadFailAction.SetZeroOrNull;
+
+            // Helper functions
+            vars.CheckAllGoldenToolsJustUnlocked = (Func<bool>)(() =>
+            {
+                bool oldComplete = true;
+                for (int i = 0; i < vars.Helper["goldenToolsUnlocked"].Old.Length; i++) {
+                    if (vars.Helper["goldenToolsUnlocked"].Old[i] == false) {
+                        oldComplete = false;
+                        break;
+                    }
                 }
+                if (oldComplete) {
+                    return false;
+                }
+                for (int i = 0; i < vars.Helper["goldenToolsUnlocked"].Current.Length; i++) {
+                    if (vars.Helper["goldenToolsUnlocked"].Current[i] == false) {
+                        return false;
+                    }
+                }
+                return true && vars.Helper["goldenToolsUnlocked"].Current.Length > 0;
+            });
+            vars.CheckAllLoddleTypesJustUnlocked = (Func<bool>)(() =>
+            {
+                bool oldComplete = true;
+                for (int i = 0; i < vars.Helper["loddleTypesUnlocked"].Old.Length; i++) {
+                    if (vars.Helper["loddleTypesUnlocked"].Old[i] == false) {
+                        oldComplete = false;
+                        break;
+                    }
+                }
+                if (oldComplete) {
+                    return false;
+                }
+                for (int i = 0; i < vars.Helper["loddleTypesUnlocked"].Current.Length; i++) {
+                    if (vars.Helper["loddleTypesUnlocked"].Current[i] == false) {
+                        return false;
+                    }
+                }
+                return true && vars.Helper["loddleTypesUnlocked"].Current.Length > 0;
+            });
+            vars.CheckAllHoloBadgesJustUnlocked = (Func<bool>)(() =>
+            {
+                bool oldComplete = true;
+                for (int i = 0; i < vars.Helper["holoBadgesUnlocked"].Old.Length; i++) {
+                    if (vars.Helper["holoBadgesUnlocked"].Old[i] == false) {
+                        oldComplete = false;
+                        break;
+                    }
+                }
+                if (oldComplete) {
+                    return false;
+                }
+                for (int i = 0; i < vars.Helper["holoBadgesUnlocked"].Current.Length; i++) {
+                    if (vars.Helper["holoBadgesUnlocked"].Current[i] == false) {
+                        return false;
+                    }
+                }
+                return true && vars.Helper["holoBadgesUnlocked"].Current.Length > 0;
             });
 
             // The "LeavePlanet" objective doesn't actually update when completing the game so we need a different watcher
             vars.Helper["gameComplete"] = mono.Make<bool>("EngineHub", "EndgameManager", "endingCutsceneSequenceHasStarted");
             vars.Helper["gameComplete"].FailAction = MemoryWatcher.ReadFailAction.SetZeroOrNull;
-
-            try {
-                var et = mono["ExtraTrackers", "ExtraTrackersMod"];
-                vars.Helper["nonBiomeComplete"] = et.Make<bool>("nonBiomeIsComplete");
-                vars.Helper["allHoloBadges"] = et.Make<bool>("allHoloBadgesFound");
-                vars.Helper["allLoddleTypes"] = et.Make<bool>("allLoddleTypesFound");
-                vars.Helper["allGoopyLoddles"] = et.Make<bool>("allGoopyLoddlesCleaned");
-                //vars.Helper["nonBiomeComplete"].Update(game);
-                //vars.Helper["allHoloBadgesFound"].Update(game);
-                //vars.Helper["allLoddleTypesFound"].Update(game);
-                //vars.Helper["allGoopyLoddlesCleaned"].Update(game);
-                vars.extraTrackersEnabled = true;
-                print("Found ExtraTrackers mod, enabling extra splits");
-            }
-            catch (Exception e) {
-                print("ExtraTrackers mod not found");
-            }
 
             // Scenes for reset detection
             vars.loadScene = 0;
@@ -178,8 +240,9 @@ init {
     vars.objectiveNames = new List<string> {
         "BlinkLoddle", "CleanFlotsamFlats", "CleanGrimyGulf", "CleanGuppiRemnants", "CleanLoddle", "CleanRippleReef", 
         "CleanTangleBay", "CraftAToy", "DismantleStructures", "FeedLoddle", "FindFlotsamFlats", "FindGrimyGulf", "FindGuppiRemnants", 
-        "FindRippleReef", "FindTangleBay", "GoHome", "LeavePlanet", "PetLoddle", "RecycleHomeCoveLitter", "ReturnLoddle", 
-        "TestCookingModule", "TestCraftingStation", "TestNewLaser", "TestNewPuddleScrubber", "TestNewScrapVac", "TestShippingStation",  
+        "FindRippleReef", "FindTangleBay", "GoHome", "PetLoddle", "RecycleHomeCoveLitter", "ReturnLoddle", 
+        "TestCookingModule", "TestCraftingStation", "TestNewLaser", "TestNewPuddleScrubber", "TestNewScrapVac", "TestShippingStation",
+        "FindGoddleGrotto", "DiversifyBiome",
     };
     // "FindMetziTrench", "CleanMetziTrench", "FindGoopSpreader",
 
@@ -187,9 +250,7 @@ init {
     vars.extraSplitNames = new List<string> {
         "blasterUnlocked", "pointerUnlocked", "rangeUnlocked", "scrapCapacityUnlocked", 
         "scrubberRadiusUnlocked", "efficiencyUnlocked", "boostUnlocked", "depthUnlocked",
-    };
-    vars.etSplitNames = new List<string> {
-        "nonBiomeComplete", "allHoloBadges", "allLoddleTypes", "allGoopyLoddles",
+        "cleanAllPollution", "globalTrackerUnlocked", "inventoryCapacityUnlocked",
     };
 }
 
@@ -211,6 +272,8 @@ split {
         if (Environment.TickCount - vars.updatedPointersTimestamp < 5000) {
             return;
         }
+
+        // Simple bool objective checkers
         foreach (string objective in vars.objectiveNames) {
             if (settings.ContainsKey(objective) && settings[objective] && !vars.Helper[objective].Old && vars.Helper[objective].Current && !vars.triggeredSplits[objective]) {
                 print("Objective " + objective + " complete, splitting");
@@ -225,15 +288,8 @@ split {
                 return true;
             }
         }
-        if (vars.extraTrackersEnabled) {
-            foreach (string split in vars.etSplitNames) {
-                if (settings.ContainsKey(split) && settings[split] && !vars.Helper[split].Old && vars.Helper[split].Current && !vars.triggeredSplits[split]) {
-                    print("Splitting on " + split);
-                    vars.triggeredSplits[split] = true;
-                    return true;
-                }
-        }
-        }
+
+        // Checks that need a bit more logic
         if (settings.ContainsKey("oxygenUpgrades") && settings["oxygenUpgrades"] && vars.Helper["oxygenUpgrades"].Old != vars.Helper["oxygenUpgrades"].Current && vars.Helper["oxygenUpgrades"].Current == 3) {
             print("Splitting on oxygenUpgrades");
             return true;
@@ -248,11 +304,29 @@ split {
                 return true;
             }
         }
-        if (vars.Helper["gameComplete"].Current && !vars.Helper["gameComplete"].Old) {
+        if (settings.ContainsKey("CleanGoddleGrotto") && settings["CleanGoddleGrotto"] && vars.Helper["fastTravelPoints"].Current.Length >= 6 && !vars.Helper["fastTravelPoints"].Old[5] && vars.Helper["fastTravelPoints"].Current[5]) {
+            print("Splitting on CleanGoddleGrotto");
+            return true;
+        }
+        if (settings.ContainsKey("allLoddleTypes") && settings["allLoddleTypes"] && vars.CheckAllLoddleTypesJustUnlocked()) {
+            print("Splitting on allLoddleTypes");
+            return true;
+        }
+        if (settings.ContainsKey("allHoloBadges") && settings["allHoloBadges"] && vars.CheckAllHoloBadgesJustUnlocked()) {
+            print("Splitting on allHoloBadges");
+            return true;
+        }
+        if (settings.ContainsKey("goldenTools") && settings["goldenTools"] && vars.CheckAllGoldenToolsJustUnlocked()) {
+            print("Splitting on goldenTools");
+            return true;
+        }
+        if (settings.ContainsKey("LeavePlanet") && settings["LeavePlanet"] && vars.Helper["gameComplete"].Current && !vars.Helper["gameComplete"].Old) {
             print("Splitting on gameComplete");
             return true;
         }
     }
+    
+    
     else if (version == "Demo") {
         bool doSplit = (old.BiomePollution > 0.000001 && current.BiomePollution <= 0.000001);
         if (doSplit) {
